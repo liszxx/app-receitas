@@ -1,138 +1,310 @@
-# app-receitas
-# 🍲 App de Receitas
+// main.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
-## 📖 Sobre o projeto
+// ===================== MODELO DE USUÁRIO =====================
+class UserModel {
+  final String nome;
+  final String email;
+  final String telefone;
 
-O **App de Receitas** foi desenvolvido como projeto integrador do curso de Análise e Desenvolvimento de Sistemas.
-Seu objetivo é oferecer uma forma prática e intuitiva de **visualizar, cadastrar, editar, excluir e favoritar receitas**, com suporte a modo offline e tema claro/escuro.
+  UserModel({required this.nome, required this.email, required this.telefone});
 
-O aplicativo foi desenvolvido em **Flutter**, utilizando **Provider** para gerenciamento de estado, **HTTP** para consumo de API e **SharedPreferences** para persistência local.
+  Map<String, dynamic> toJson() => {
+        'nome': nome,
+        'email': email,
+        'telefone': telefone,
+      };
 
----
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      nome: json['nome'],
+      email: json['email'],
+      telefone: json['telefone'],
+    );
+  }
+}
 
-## 🧩 Funcionalidades
+// ===================== PROVIDER PARA CONTADOR =====================
+class CounterProvider extends ChangeNotifier {
+  int counter = 0;
 
-* Listagem de receitas (GET API)
-* Exibição de detalhes da receita
-* Cadastro, edição e exclusão de receitas (POST/PUT/DELETE)
-* Favoritar receitas (armazenamento local)
-* Pesquisa e filtro de receitas
-* Tema claro e escuro
-* Suporte básico offline (cache e mensagens de erro)
+  void increment() {
+    counter++;
+    notifyListeners(); // Atualiza todas as telas/listeners que escutam este provider
+  }
+}
 
----
+// ===================== PROVIDER PARA TEMA =====================
+class ThemeProvider extends ChangeNotifier {
+  bool isDarkMode = false;
 
-## 🧱 Estrutura do projeto
+  Future<void> loadTheme() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    isDarkMode = prefs.getBool('isDarkMode') ?? false;
+    notifyListeners();
+  }
 
-```
-lib/
-├── models/        # Classes (ex.: Receita)
-├── services/      # Comunicação com API
-├── repositories/  # Regras de negócio e persistência
-├── providers/     # Gerenciamento de estado (Provider)
-├── views/         # Telas e widgets
-│   ├── widgets/   # Componentes reutilizáveis
-├── utils/         # Helpers, máscaras e constantes
-└── main.dart      # Ponto de entrada do app
-```
+  Future<void> toggleTheme() async {
+    isDarkMode = !isDarkMode;
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isDarkMode', isDarkMode);
+    notifyListeners();
+  }
+}
 
----
+// ===================== INÍCIO DO APP =====================
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CounterProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
+}
 
-## ⚙️ Tecnologias utilizadas
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-* **Flutter** (SDK)
-* **Provider** – gerenciamento de estado
-* **HTTP** – consumo de API REST
-* **SharedPreferences** – armazenamento local
-* **flutter_dotenv** – variáveis de ambiente
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return MaterialApp(
+          title: 'Exemplo Prova',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData.light(),
+          darkTheme: ThemeData.dark(),
+          themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          home: const HomeScreen(),
+        );
+      },
+    );
+  }
+}
 
----
+// ===================== HOME SCREEN =====================
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
-## 🔌 Configuração e execução
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
 
-### Pré-requisitos
+class _HomeScreenState extends State<HomeScreen> {
+  // Variáveis de estado local
+  Color bgColor = Colors.white;
+  bool switchValue = false;
+  bool checkValue = false;
+  double sliderValue = 0;
 
-* Flutter SDK instalado
-* Editor (VS Code / Android Studio)
+  // Usuário fake para exemplo
+  final UserModel userAtual = UserModel(nome: 'Elisa', email: 'elisa@email.com', telefone: '11999999999');
 
-### Passos para rodar o projeto
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Home Screen'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.brightness_6),
+            onPressed: () {
+              // Alterna o tema claro/escuro
+              context.read<ThemeProvider>().toggleTheme();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Tema alternado!')),
+              );
+            },
+          )
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ================== GESTUREDETECTOR ==================
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  bgColor = bgColor == Colors.white ? Colors.blue.shade100 : Colors.white;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cor de fundo alterada!')),
+                );
+              },
+              child: Container(
+                height: 100,
+                color: bgColor,
+                child: const Center(child: Text('Toque para alternar cor')),
+              ),
+            ),
+            const SizedBox(height: 16),
 
-1. Clone o repositório:
+            // ================== BOTÃO DE NAVEGAÇÃO COM PARAMETRO ==================
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(user: userAtual),
+                  ),
+                );
+              },
+              child: const Text('Ver Perfil'),
+            ),
+            const SizedBox(height: 16),
 
-   ```bash
-   git clone https://github.com/seu-usuario/app-receitas.git
-   ```
-2. Entre na pasta do projeto:
+            // ================== CHANGE NOTIFIER EXEMPLO ==================
+            Text('Contador global usando ChangeNotifier:', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Consumer<CounterProvider>(
+              builder: (context, counterProvider, _) {
+                return Column(
+                  children: [
+                    Text('Valor: ${counterProvider.counter}', style: const TextStyle(fontSize: 18)),
+                    ElevatedButton(
+                      onPressed: counterProvider.increment,
+                      child: const Text('Incrementar contador'),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
 
-   ```bash
-   cd app-receitas
-   ```
-3. Instale as dependências:
+            // ================== SLIDER ==================
+            Text('Slider: ${sliderValue.toStringAsFixed(1)}'),
+            Slider(
+              value: sliderValue,
+              min: 0,
+              max: 100,
+              divisions: 20,
+              label: sliderValue.toStringAsFixed(1),
+              onChanged: (value) {
+                setState(() {
+                  sliderValue = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
 
-   ```bash
-   flutter pub get
-   ```
-4. Crie o arquivo `.env` baseado no `.env.example` e adicione a URL da sua API:
+            // ================== RADIO ==================
+            Text('Escolha uma opção:'),
+            RadioListTile<String>(
+              title: const Text('Opção 1'),
+              value: '1',
+              groupValue: switchValue ? '2' : '1',
+              onChanged: (value) {
+                setState(() {
+                  switchValue = value == '2';
+                });
+              },
+            ),
+            RadioListTile<String>(
+              title: const Text('Opção 2'),
+              value: '2',
+              groupValue: switchValue ? '2' : '1',
+              onChanged: (value) {
+                setState(() {
+                  switchValue = value == '2';
+                });
+              },
+            ),
+            const SizedBox(height: 16),
 
-   ```
-   API_URL=https://mockapi.io/api/v1/
-   ```
-5. Execute o app:
+            // ================== SWITCH ==================
+            SwitchListTile(
+              title: const Text('Ativar opção'),
+              value: switchValue,
+              onChanged: (value) {
+                setState(() {
+                  switchValue = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
 
-   ```bash
-   flutter run
-   ```
+            // ================== CHECKBOX ==================
+            CheckboxListTile(
+              title: const Text('Selecionar item'),
+              value: checkValue,
+              onChanged: (value) {
+                setState(() {
+                  checkValue = value ?? false;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
 
----
+            // ================== LISTVIEW FUTUREBUILDER (API SIMULADA) ==================
+            const Text('Exemplo de API (GET):', style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(
+              height: 200,
+              child: FutureBuilder<List<String>>(
+                future: fetchFakeData(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  } else if (snapshot.hasError) {
+                    return Center(child: Text('Erro: ${snapshot.error}'));
+                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text('Nenhum dado encontrado'));
+                  } else {
+                    final items = snapshot.data!;
+                    return ListView.builder(
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        return ListTile(
+                          title: Text(items[index]),
+                        );
+                      },
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-## 👥 Equipe de desenvolvimento
+  // Simula chamada GET
+  Future<List<String>> fetchFakeData() async {
+    await Future.delayed(const Duration(seconds: 2));
+    return ['Item 1', 'Item 2', 'Item 3', 'Item 4'];
+  }
+}
 
-| Integrante   | Responsável por         | Telas principais |
-| ------------ | ----------------------- | ---------------- |
-| Integrante 1 | Home e Listagem         | 2                |
-| Integrante 2 | Detalhe e Favoritos     | 2                |
-| Integrante 3 | Cadastro e Edição       | 2                |
-| Integrante 4 | Configurações e Offline | 2                |
-| Integrante 5 | Login/Sobre e Delete    | 2                |
+// ===================== PROFILE SCREEN =====================
+class ProfileScreen extends StatelessWidget {
+  final UserModel user;
 
----
+  const ProfileScreen({super.key, required this.user});
 
-## 🧭 Diagrama de Navegação
-
-(diagrama ilustrando o fluxo entre as telas — pode inserir aqui a imagem gerada)
-
----
-
-## 🧪 Testes realizados
-
-* CRUD de receitas
-* Favoritar/desfavoritar
-* Filtro e pesquisa
-* Alternância de tema
-* Modo offline
-* Tratamento de erros de rede
-
----
-
-## 📅 Cronograma de desenvolvimento
-
-| Semana | Etapa                | Entregas principais                     |
-| ------ | -------------------- | --------------------------------------- |
-| 1      | Planejamento e setup | Estrutura do projeto, rotas, telas base |
-| 2      | API e listagem       | Consumo de dados e exibição na Home     |
-| 3      | CRUD completo        | Formulários com validação               |
-| 4      | Favoritos e offline  | Persistência local e cache              |
-| 5      | Finalização          | Testes, README, vídeo demo e slides     |
-
----
-
-## 📹 Demonstração
-
-🎬 
----
-
-## 📦 Versão e licença
-
-Versão 1.0 — uso educacional, sem fins comerciais.
-
----
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Perfil do Usuário')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Nome: ${user.nome}', style: const TextStyle(fontSize: 18)),
+            Text('Email: ${user.email}', style: const TextStyle(fontSize: 18)),
+            Text('Telefone: ${user.telefone}', style: const TextStyle(fontSize: 18)),
+          ],
+        ),
+      ),
+    );
+  }
+}
