@@ -1,96 +1,7 @@
-// main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'contador_store.dart';
 
-// ===================== MODELO DE USUÁRIO =====================
-class UserModel {
-  final String nome;
-  final String email;
-  final String telefone;
-
-  UserModel({required this.nome, required this.email, required this.telefone});
-
-  Map<String, dynamic> toJson() => {
-        'nome': nome,
-        'email': email,
-        'telefone': telefone,
-      };
-
-  factory UserModel.fromJson(Map<String, dynamic> json) {
-    return UserModel(
-      nome: json['nome'],
-      email: json['email'],
-      telefone: json['telefone'],
-    );
-  }
-}
-
-// ===================== PROVIDER PARA CONTADOR =====================
-class CounterProvider extends ChangeNotifier {
-  int counter = 0;
-
-  void increment() {
-    counter++;
-    notifyListeners(); // Atualiza todas as telas/listeners que escutam este provider
-  }
-}
-
-// ===================== PROVIDER PARA TEMA =====================
-class ThemeProvider extends ChangeNotifier {
-  bool isDarkMode = false;
-
-  Future<void> loadTheme() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    isDarkMode = prefs.getBool('isDarkMode') ?? false;
-    notifyListeners();
-  }
-
-  Future<void> toggleTheme() async {
-    isDarkMode = !isDarkMode;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isDarkMode', isDarkMode);
-    notifyListeners();
-  }
-}
-
-// ===================== INÍCIO DO APP =====================
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => CounterProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-      ],
-      child: const MyApp(),
-    ),
-  );
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, _) {
-        return MaterialApp(
-          title: 'Exemplo Prova',
-          debugShowCheckedModeBanner: false,
-          theme: ThemeData.light(),
-          darkTheme: ThemeData.dark(),
-          themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-          home: const HomeScreen(),
-        );
-      },
-    );
-  }
-}
-
-// ===================== HOME SCREEN =====================
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -99,209 +10,181 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Variáveis de estado local
-  Color bgColor = Colors.white;
-  bool switchValue = false;
-  bool checkValue = false;
-  double sliderValue = 0;
+  // Q1
+  bool mostrarDetalhes = false;
 
-  // Usuário fake para exemplo
-  final UserModel userAtual = UserModel(nome: 'Elisa', email: 'elisa@email.com', telefone: '11999999999');
+  // Q2
+  int contadorLocal = 0;
+
+  // Q3
+  bool statusAtivo = false;
+
+  // Q4
+  final ValueNotifier<int> valorNotifier = ValueNotifier<int>(0);
 
   @override
   Widget build(BuildContext context) {
+    final contadorStore = context.watch<ContadorStore>(); // Q5
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home Screen'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.brightness_6),
-            onPressed: () {
-              // Alterna o tema claro/escuro
-              context.read<ThemeProvider>().toggleTheme();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Tema alternado!')),
-              );
-            },
-          )
-        ],
+        title: const Text("Prova – Card 4"),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ================== GESTUREDETECTOR ==================
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  bgColor = bgColor == Colors.white ? Colors.blue.shade100 : Colors.white;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cor de fundo alterada!')),
-                );
-              },
-              child: Container(
-                height: 100,
-                color: bgColor,
-                child: const Center(child: Text('Toque para alternar cor')),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ================== BOTÃO DE NAVEGAÇÃO COM PARAMETRO ==================
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProfileScreen(user: userAtual),
-                  ),
-                );
-              },
-              child: const Text('Ver Perfil'),
-            ),
-            const SizedBox(height: 16),
-
-            // ================== CHANGE NOTIFIER EXEMPLO ==================
-            Text('Contador global usando ChangeNotifier:', style: const TextStyle(fontWeight: FontWeight.bold)),
-            Consumer<CounterProvider>(
-              builder: (context, counterProvider, _) {
-                return Column(
-                  children: [
-                    Text('Valor: ${counterProvider.counter}', style: const TextStyle(fontSize: 18)),
-                    ElevatedButton(
-                      onPressed: counterProvider.increment,
-                      child: const Text('Incrementar contador'),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // ================== SLIDER ==================
-            Text('Slider: ${sliderValue.toStringAsFixed(1)}'),
-            Slider(
-              value: sliderValue,
-              min: 0,
-              max: 100,
-              divisions: 20,
-              label: sliderValue.toStringAsFixed(1),
-              onChanged: (value) {
-                setState(() {
-                  sliderValue = value;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // ================== RADIO ==================
-            Text('Escolha uma opção:'),
-            RadioListTile<String>(
-              title: const Text('Opção 1'),
-              value: '1',
-              groupValue: switchValue ? '2' : '1',
-              onChanged: (value) {
-                setState(() {
-                  switchValue = value == '2';
-                });
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('Opção 2'),
-              value: '2',
-              groupValue: switchValue ? '2' : '1',
-              onChanged: (value) {
-                setState(() {
-                  switchValue = value == '2';
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // ================== SWITCH ==================
-            SwitchListTile(
-              title: const Text('Ativar opção'),
-              value: switchValue,
-              onChanged: (value) {
-                setState(() {
-                  switchValue = value;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // ================== CHECKBOX ==================
-            CheckboxListTile(
-              title: const Text('Selecionar item'),
-              value: checkValue,
-              onChanged: (value) {
-                setState(() {
-                  checkValue = value ?? false;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // ================== LISTVIEW FUTUREBUILDER (API SIMULADA) ==================
-            const Text('Exemplo de API (GET):', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(
-              height: 200,
-              child: FutureBuilder<List<String>>(
-                future: fetchFakeData(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  } else if (snapshot.hasError) {
-                    return Center(child: Text('Erro: ${snapshot.error}'));
-                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text('Nenhum dado encontrado'));
-                  } else {
-                    final items = snapshot.data!;
-                    return ListView.builder(
-                      itemCount: items.length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          title: Text(items[index]),
-                        );
-                      },
-                    );
-                  }
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Simula chamada GET
-  Future<List<String>> fetchFakeData() async {
-    await Future.delayed(const Duration(seconds: 2));
-    return ['Item 1', 'Item 2', 'Item 3', 'Item 4'];
-  }
-}
-
-// ===================== PROFILE SCREEN =====================
-class ProfileScreen extends StatelessWidget {
-  final UserModel user;
-
-  const ProfileScreen({super.key, required this.user});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Perfil do Usuário')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Nome: ${user.nome}', style: const TextStyle(fontSize: 18)),
-            Text('Email: ${user.email}', style: const TextStyle(fontSize: 18)),
-            Text('Telefone: ${user.telefone}', style: const TextStyle(fontSize: 18)),
+
+            //----------------------------------------------------------------------
+            // Q1 – SWITCH PARA MOSTRAR/OCULTAR DETALHES
+            //----------------------------------------------------------------------
+            const Text(
+              "Q1 – Mostrar detalhes com Switch",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            SwitchListTile(
+              title: const Text("Exibir detalhes"),
+              value: mostrarDetalhes,
+              onChanged: (v) {
+                setState(() {
+                  mostrarDetalhes = v;
+                });
+              },
+            ),
+            if (mostrarDetalhes)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text(
+                  "Aqui estão os detalhes adicionais...",
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
+
+            const Divider(),
+
+            //----------------------------------------------------------------------
+            // Q2 – CONTADOR LOCAL + E -
+            //----------------------------------------------------------------------
+            const Text(
+              "Q2 – Contador com + e -",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Row(
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() => contadorLocal--);
+                  },
+                  child: const Text("-1"),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    "$contadorLocal",
+                    style: const TextStyle(fontSize: 22),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() => contadorLocal++);
+                  },
+                  child: const Text("+1"),
+                ),
+              ],
+            ),
+
+            const Divider(),
+
+            //----------------------------------------------------------------------
+            // Q3 – STATUS VISUAL (ATIVO/INATIVO)
+            //----------------------------------------------------------------------
+            const Text(
+              "Q3 – Status visual",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () {
+                setState(() => statusAtivo = !statusAtivo);
+              },
+              child: Container(
+                height: 80,
+                width: double.infinity,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: statusAtivo ? Colors.green : Colors.red,
+                ),
+                child: Text(
+                  statusAtivo ? "Ativo" : "Inativo",
+                  style: const TextStyle(color: Colors.white, fontSize: 22),
+                ),
+              ),
+            ),
+
+            const Divider(),
+
+            //----------------------------------------------------------------------
+            // Q4 – VALUENOTIFIER
+            //----------------------------------------------------------------------
+            const Text(
+              "Q4 – ValueNotifier",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+
+            ValueListenableBuilder<int>(
+              valueListenable: valorNotifier,
+              builder: (context, valor, _) {
+                return Text(
+                  "Valor atual: $valor",
+                  style: const TextStyle(fontSize: 20),
+                );
+              },
+            ),
+
+            Row(
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    valorNotifier.value++;
+                  },
+                  child: const Text("Incrementar"),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    valorNotifier.value = 0;
+                  },
+                  child: const Text("Zerar"),
+                ),
+              ],
+            ),
+
+            const Divider(),
+
+            //----------------------------------------------------------------------
+            // Q5 – CHANGENOTIFIER (GLOBAL)
+            //----------------------------------------------------------------------
+            const Text(
+              "Q5 – ChangeNotifier compartilhado",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+
+            Text(
+              "Valor global: ${contadorStore.valor}",
+              style: const TextStyle(fontSize: 22),
+            ),
+
+            ElevatedButton(
+              onPressed: () {
+                contadorStore.incrementar();
+              },
+              child: const Text("Somar +1 Global"),
+            ),
+
+            const SizedBox(height: 40),
           ],
         ),
       ),
